@@ -47,7 +47,10 @@ ALLOWED_ATTRS = {
 }
 
 ALLOWED_STYLES = (
-    'color'
+    'color',
+    'font-weight',
+    'font-style',
+    'font-variant'
 )
 
 
