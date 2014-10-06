@@ -1,20 +1,21 @@
 # encoding: utf-8
 from __future__ import absolute_import, unicode_literals
 
-from pprint import pprint
 import logging
-from PIL import Image
 
+from PIL import Image
 from docx import Document
+
 # experiments with .docm
 #from docx.parts.document import DocumentPart
 #from docx.opc.package import PartFactory
 #from docx.opc.constants import CONTENT_TYPE
 
-from parser import Context, gen_tree
-
 import docx_ext
+from docx_ext.parser import Context, gen_tree
 
+
+# patch docx library
 docx_ext.init()
 
 log = logging.getLogger(__name__)

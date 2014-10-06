@@ -14,12 +14,13 @@ from docx.text import Paragraph, Run
 from lxml.etree import QName
 import lxml.html
 
+
 try:
     from PIL.Image import Image
 except ImportError:
     Image = None
 
-from utils import make_abs, make_relative
+from .utils import make_abs, make_relative
 
 
 ALLOWED_TAGS = (
@@ -52,7 +53,6 @@ ALLOWED_STYLES = (
     'font-style',
     'font-variant'
 )
-
 
 __author__ = 'bluec0re'
 
@@ -92,6 +92,7 @@ def clean_attr(allowed_attrs, m):
 
 
 def clean_attrs(m):
+    # noinspection PyTypeChecker
     return re.sub(r'\s+(?P<name>[^ =]+)\s*=\s*"?(?P<value>[^"]+)"?',
                   partial(clean_attr, ALLOWED_ATTRS.get(m.group('name'), ()) + ALLOWED_ATTRS['*']),
                   m.group(0))
@@ -127,12 +128,13 @@ def clean_html(html):
     tags = ['({0}[ >/])'.format(re.escape(tag)) for tag in ALLOWED_TAGS]
     tags += ['(/{0}[ >/])'.format(re.escape(tag)) for tag in ALLOWED_TAGS]
     regex = '<(?!{0})[^>]*>'.format('|'.join(tags))
-    #print(regex)
+    # print(regex)
     html = re.sub(regex, '', html)
 
     html = re.sub(r'<(?P<name>[^ >]+)[^>]*>', clean_attrs, html)
 
     return html
+
 
 _IMAGE_FACTORIES = set([])
 
@@ -152,6 +154,7 @@ def register_image_factory(factory):
 def unregister_image_factory(factory):
     global _IMAGE_FACTORIES
     _IMAGE_FACTORIES.erase(factory)
+
 
 # noinspection PyProtectedMember
 class Field(Parented):
@@ -225,7 +228,7 @@ class Field(Parented):
                 log.warning("Couldn't find start: %s", self.xpath_start)
                 raise
         if self.__start is not None and self.__end is not None and \
-                        self.__start.getparent() == self.__end.getparent():
+           self.__start.getparent() == self.__end.getparent():
             self._parent._p = self.__start.getparent()
         return self.__start
 
@@ -246,7 +249,7 @@ class Field(Parented):
                 log.warning("Couldn't find end: %s", self.xpath_end)
                 raise
         if self.__start is not None and self.__end is not None and \
-                        self.__start.getparent() == self.__end.getparent():
+           self.__start.getparent() == self.__end.getparent():
             self._parent._p = self.__start.getparent()
         return self.__end
 
@@ -256,21 +259,21 @@ class Field(Parented):
         if value is not None:
             self.__xpath_end = self.__end.getroottree().getpath(value)
 
-    def insert(self, run, object, allowed_styles=None):
-        if Image is not None and isinstance(object, Image):
+    def insert(self, run, obj, allowed_styles=None):
+        if Image is not None and isinstance(obj, Image):
             io = BytesIO()
-            object.save(io, 'PNG')
+            obj.save(io, 'PNG')
             doc = run._parent._parent._parent
             # TODO: verify correctness
             section = doc.sections[-1]
             width = section.page_width - section.left_margin - section.right_margin
             run.add_picture(io, width=width)
 
-            if hasattr(object, 'caption'):
+            if hasattr(obj, 'caption'):
                 para = run._parent
-                return para.add_caption(object.caption)
-        elif re.search('<(.+?)>', object):
-            html = clean_html(object)
+                return para.add_caption(obj.caption)
+        elif re.search('<(.+?)>', obj):
+            html = clean_html(obj)
             root = lxml.html.fromstring(html)
 
             def _get_styles(elem):
@@ -309,63 +312,63 @@ class Field(Parented):
                     raise ValueError(msg)
                 return clazz
 
-            def _transform(run, el, is_first=False):
-                log.debug('Transforming element %s into %s', el, run._r.getroottree().getpath(run._r))
+            def _transform(currentrun, el, is_first=False):
+                log.debug('Transforming element %s into %s', el, currentrun._r.getroottree().getpath(currentrun._r))
                 parts = [el.text] + [x for c in el for x in (c, c.tail)]
                 if isinstance(parts[0], str):
-                    run.text = parts[0]
+                    currentrun.text = parts[0]
 
                 for part in parts[1:]:
                     if part is None:
                         continue
-                    log.debug("Run path: %s", run._r.getroottree().getpath(run._r))
+                    log.debug("Run path: %s", currentrun._r.getroottree().getpath(currentrun._r))
                     if isinstance(part, str):
-                        run = run._parent.append_run(run, part)
+                        currentrun = currentrun._parent.append_run(currentrun, part)
                     elif part.tag == 'p':
                         if not is_first:
                             log.debug('New paragraph')
-                            p = run._parent.insert_paragraph_after()
+                            p = currentrun._parent.insert_paragraph_after()
                             p.style = _get_class(part)
-                            run = p.add_run()
+                            currentrun = p.add_run()
                         is_first = False
-                        run = _transform(run, part)
+                        currentrun = _transform(currentrun, part)
                     else:
                         clazz = _get_class(part)
                         if clazz and clazz.startswith('Heading'):
                             log.debug('New heading')
                             # create new paragraph
-                            p = run._parent.insert_paragraph_after()
+                            p = currentrun._parent.insert_paragraph_after()
                             p.style = clazz
-                            run = p.add_run()
+                            currentrun = p.add_run()
                         else:
-                            run = run._parent.append_run(run, None, style=clazz)
+                            currentrun = currentrun._parent.append_run(currentrun, None, style=clazz)
                         styles = _get_styles(part)
                         if 'color' in styles:
-                            run.color = styles['color'].replace('#', '')
+                            currentrun.color = styles['color'].replace('#', '')
                         if 'font-weight' in styles:
-                            run.bold = 'bold' in styles['font-weight']
+                            currentrun.bold = 'bold' in styles['font-weight']
                         if 'font-variant' in styles:
-                            run.small_caps = 'small-caps' in styles['font-variant']
+                            currentrun.small_caps = 'small-caps' in styles['font-variant']
                         if 'font-style' in styles:
-                            run.italic = 'italic' in styles['font-style']
+                            currentrun.italic = 'italic' in styles['font-style']
 
                         if part.tag == 'img':
                             log.debug('New image')
                             img = image_factory(part.attrib.get('src'))
                             if img is not None:
                                 img.caption = part.attrib.get('alt')
-                            p = run._parent.insert_paragraph_after()
-                            run = p.add_run()
-                            p = self.insert(run, img)
-                            run = p.runs[-1]
-                            #run = p.add_run()  # maybe not optimal
+                            p = currentrun._parent.insert_paragraph_after()
+                            currentrun = p.add_run()
+                            p = self.insert(currentrun, img)
+                            currentrun = p.runs[-1]
+                            # currentrun = p.add_run()  # maybe not optimal
                         else:
-                            run = _transform(run, part)
-                return run
+                            currentrun = _transform(currentrun, part)
+                return currentrun
 
             _transform(run, root, True)
         else:
-            run.text = object
+            run.text = obj
 
     def replace(self, text, base=None, allowed_styles=None):
         log.debug("Replacing content from %s with '%s' in %s", self, text, base)

@@ -5,10 +5,7 @@ import logging
 from copy import deepcopy
 import re
 
-# noinspection PyUnresolvedReferences
-from docx_ext.fields import Field
-
-from utils import Default, make_relative, make_abs
+from .utils import Default, make_relative, make_abs
 
 log = logging.getLogger(__name__)
 
@@ -16,8 +13,8 @@ __author__ = 'bluec0re'
 
 
 class ParserException(Default, Exception):
-    def __init__(self, msg, obj, *args, **kwargs):
-        super(ParserException, self).__init__(*args, **kwargs)
+    def __init__(self, msg, obj):
+        super(ParserException, self).__init__()
         self.msg = msg
         self.obj = obj
 
@@ -147,10 +144,10 @@ class If(FieldBased, Container):
                 self._num += 1
                 return var
 
-        vars = ReplaceVars()
-        code = re.sub(r'\$(\S+)', vars, code)
+        variables = ReplaceVars()
+        code = re.sub(r'\$(\S+)', variables, code)
 
-        if eval(code, vars.locals, {}):
+        if eval(code, variables.locals, {}):
             log.debug("If success")
             super(If, self).evaluate(context,
                                      base=base,

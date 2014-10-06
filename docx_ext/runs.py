@@ -9,6 +9,7 @@ from docx.text import Run
 __author__ = 'bluec0re'
 
 
+# noinspection PyPep8Naming
 class CT_RPr2(CT_RPr):
     """
     ``<w:rStyle>`` element, containing the properties for a style.
@@ -41,6 +42,7 @@ def _r_color_getter(self):
     String contained in w:color element of <w:rStyle> grandchild, or
     |None| if that element is not present.
     """
+    # noinspection PyPep8Naming
     rPr = self.rPr
     if rPr is None:
         return None
@@ -52,6 +54,7 @@ def _r_color_setter(self, color):
     Set the character style of this <w:r> element to *style*. If *style*
     is None, remove the style element.
     """
+    # noinspection PyPep8Naming
     rPr = self.get_or_add_rPr()
     rPr.color = color
 

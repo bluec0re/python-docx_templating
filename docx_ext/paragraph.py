@@ -21,6 +21,7 @@ def _insert_after(self, text=None, style=None):
 Paragraph.insert_paragraph_after = _insert_after
 
 
+# noinspection PyProtectedMember
 def _add_caption(self, text, sequence_name=None):
     if not sequence_name:
         sequence_name = 'Figure'
@@ -42,6 +43,7 @@ def _add_caption(self, text, sequence_name=None):
 Paragraph.add_caption = _add_caption
 
 
+# noinspection PyProtectedMember
 def _append_run(self, run, text, style=None):
     new_r = run._r.add_r_after()
     new_r = Run(new_r, self)

@@ -7,6 +7,7 @@ from docx.oxml.ns import qn
 __author__ = 'bluec0re'
 
 
+# noinspection PyProtectedMember
 def _styles(self):
     styles = {}
     for style in self.styles_part.styles._styles_elm.style_lst:
