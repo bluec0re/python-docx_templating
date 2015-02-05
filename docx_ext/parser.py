@@ -4,6 +4,10 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from copy import deepcopy
 import re
+import sys
+
+if sys.version > '3':
+    unicode = str
 
 from .utils import Default, make_relative, make_abs
 
@@ -77,6 +81,9 @@ class Container(Default):
 
     def content(self):
         elements = []
+        if self.start.end is None:
+            return elements
+
         root = self.start.end.getparent()
         for el in root.itersiblings():
             if el == self.end.start.getparent():
@@ -168,6 +175,9 @@ class ForEach(FieldBased, Container):
 
     def itervalues(self, context):
         src = context.resolve(self.src)
+        if src is None:
+            return
+
         for i, value in enumerate(src):
             yield Context(variables={
                 self.dest: value,
@@ -206,7 +216,7 @@ class ForEach(FieldBased, Container):
             yield cache
 
     def evaluate(self, context, base=None, allowed_styles=None):
-        log.debug("Evaluating foreach %s %s", self.src, repr(self.start).decode('utf-8'))
+        log.debug("Evaluating foreach %s %s", self.src, repr(self.start))
         content_elements = None
         last_paragraph = self.end.start.getparent().getnext()
 
@@ -216,9 +226,15 @@ class ForEach(FieldBased, Container):
         else:
             root_xpath = None
 
+        if len(self.content()) == 0:
+            log.warning("Foreach with empty body: %s", self)
+            return
+
         child_cache = list(self._build_cache(root_xpath))
 
+        has_content = False
         for new_context in self.itervalues(context):
+            has_content = True
             log.debug('Using context %r', new_context)
 
             if content_elements is None:
@@ -279,6 +295,8 @@ class ForEach(FieldBased, Container):
                 child.evaluate(new_context,
                                base=base,
                                allowed_styles=allowed_styles)
+        if not has_content:
+            self.remove_content()
 
         self.remove_fields()
 
@@ -287,6 +305,12 @@ def gen_tree(doc):
     fields = []
     for paragraph in doc.paragraphs:
         fields += paragraph.fields()
+
+    for table in doc.tables:
+        fields += table.fields()
+
+    for textboxes in doc.textboxes:
+        fields += textboxes.fields()
 
     fields = [f for f in fields if f.code == 'MERGEFIELD' and f.extra]
 
@@ -297,24 +321,24 @@ def gen_tree(doc):
         cmd = cmd[1:]
         if cmd_type == '$':
             v = Variable(f, cmd)
-            log.info("Variable found %s", v)
+            log.info("Variable found %s", v.path)
             container.childs.append(v)
         elif cmd_type == '#':
             if cmd.startswith('foreach'):
-                m = re.search(r'^foreach\((.+)\s+in\s+\$(.+)\)$', cmd)
+                m = re.search(r'^foreach\(\$?(.+)\s+in\s+\$(.+)\)$', cmd)
 
                 container = ForEach(field=f, parent=container, src=m.group(2), dest=m.group(1))
-                log.info("Foreach found %s", unicode(container))
+                log.info("Foreach found %s in %s", container.dest, container.src)
                 container.parent.childs.append(container)
             elif cmd.startswith('if'):
                 m = re.search(r'^if\((.+)\)$', cmd)
 
                 container = If(field=f, parent=container, src=m.group(1))
-                log.info("If found %s", unicode(container))
+                log.info("If found %s", container.src)
                 container.parent.childs.append(container)
             elif cmd.startswith('end'):
                 container.end = f
-                log.info("End found %s (in %s)", f, unicode(container))
+                log.debug("End found %s (in %s)", f, unicode(container))
                 log.debug("Has %d paragraphs", len(container.content()))
                 container = container.parent
 

@@ -10,6 +10,7 @@ from docx import Document
 #from docx.parts.document import DocumentPart
 #from docx.opc.package import PartFactory
 #from docx.opc.constants import CONTENT_TYPE
+import sys
 
 import docx_ext
 from docx_ext.parser import Context, gen_tree
@@ -50,7 +51,10 @@ def main():
     #CONTENT_TYPE.WML_DOCUMENT_MAIN = 'application/vnd.ms-word.document.macroEnabled.main+xml'
     #PartFactory.part_type_for[CONTENT_TYPE.WML_DOCUMENT_MAIN] = DocumentPart
     #doc = Document("HelloField.docm")
-    doc = Document("HelloField.docx")
+    if len(sys.argv) > 1:
+        doc = Document(sys.argv[1])
+    else:
+        doc = Document("HelloField.docx")
 
     tree = gen_tree(doc)
     try:

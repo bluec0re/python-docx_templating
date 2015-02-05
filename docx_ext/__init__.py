@@ -4,6 +4,8 @@ from __future__ import absolute_import, unicode_literals
 
 __author__ = 'bluec0re'
 
+__version__ = '0.1'
+
 from .fields import Field, register_image_factory, unregister_image_factory
 
 # noinspection PyUnresolvedReferences

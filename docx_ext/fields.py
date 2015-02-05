@@ -10,9 +10,12 @@ import re
 
 from docx.oxml.ns import qn
 from docx.shared import Parented
+from docx.table import Table
 from docx.text import Paragraph, Run
 from lxml.etree import QName
 import lxml.html
+from docx_ext.parser import ParserException
+from docx_ext.textbox import Textbox
 
 
 try:
@@ -189,7 +192,7 @@ class Field(Parented):
             self.extra,
             self.xpath_start,
             self.xpath_end
-        )).encode('utf-8')
+        ))#.encode('utf-8')
 
     @property
     def xpath_start(self):
@@ -215,7 +218,7 @@ class Field(Parented):
     def xpath_end(self, value):
         self.__xpath_end = value
         self.__end = None
-        assert self.end is not None
+        assert self.end is not None or self.__start is not None
 
     @property
     def start(self):
@@ -226,7 +229,7 @@ class Field(Parented):
                 self.__start = base.xpath(self.xpath_start)[0]
             except IndexError:
                 log.warning("Couldn't find start: %s", self.xpath_start)
-                raise
+
         if self.__start is not None and self.__end is not None and \
            self.__start.getparent() == self.__end.getparent():
             self._parent._p = self.__start.getparent()
@@ -247,7 +250,7 @@ class Field(Parented):
                 self.__end = base.xpath(self.xpath_end)[0]
             except IndexError:
                 log.warning("Couldn't find end: %s", self.xpath_end)
-                raise
+
         if self.__start is not None and self.__end is not None and \
            self.__start.getparent() == self.__end.getparent():
             self._parent._p = self.__start.getparent()
@@ -260,6 +263,9 @@ class Field(Parented):
             self.__xpath_end = self.__end.getroottree().getpath(value)
 
     def insert(self, run, obj, allowed_styles=None):
+        if obj is None:
+            return
+
         if Image is not None and isinstance(obj, Image):
             io = BytesIO()
             obj.save(io, 'PNG')
@@ -379,23 +385,39 @@ class Field(Parented):
             end = base.xpath(self.xpath_end)[0]
 
         log.debug("Using start: %s %s %s", start, self.xpath_start, start.getparent())
-        log.debug("Using end: %s %s %s", end, self.xpath_end, end.getparent())
+        log.debug("Using end: %s %s %s", end, self.xpath_end, end.getparent() if end is not None else None)
 
         for sibl in start.itersiblings():
             sibl.getparent().remove(sibl)
             if [sibl] == end:
                 break
-        r = Run(start, self._parent)
-        r._r.clear_content()
-        self.insert(r, text, allowed_styles=allowed_styles)
-        return r
+
+        if start.tag.endswith('r'):
+            r = Run(start, self._parent)
+            if hasattr(r._r, 'clear_content'):
+                r._r.clear_content()
+            self.insert(r, text, allowed_styles=allowed_styles)
+            return r
+        else:
+            # TODO
+            pass
 
     def remove(self):
         r = self.replace('')
+        if r is None:
+            return
+
         p = r._parent
         parent = r._r.getparent()
         log.debug("%s P: %s", self, parent)
-        parent.remove(r._r)
+        if parent is not None:
+            parent.remove(r._r)
+        else:
+            log.warning("Parent is none for %s", self)
+
+        if p._p is None:
+            log.warning("Parent of %s has no element attached to it", self)
+            return
 
         if len(p.runs) == 0:
             parent = p._p.getparent()
@@ -423,7 +445,9 @@ def _fields(self):
     field = None
     # noinspection PyPep8Naming
     fldCharType = qn('w:fldCharType')
+    instr = qn('w:instr')
     root = self._p.getroottree()
+    instructions = ''
 
     for run in self.runs:
         for chld in run._r.getchildren():
@@ -433,29 +457,88 @@ def _fields(self):
                     field = Field(self)
                     field.xpath_start = root.getpath(run._r)
                 elif chld.attrib.get(fldCharType) == 'end' and field is not None:
+                    if instructions:
+                        lex = shlex.shlex(instructions, posix=True)
+                        lex.whitespace_split = True
+                        lex.commenters = ''
+                        lex.escape = ''
+                        try:
+                            tokens = list(lex)
+                        except ValueError as e:
+                            raise ParserException(str(e) + chld.text, chld)
+
+                        field.code = tokens[0]
+                        fmt_target = None
+                        for token in tokens[1:]:
+                            if fmt_target is not None:
+                                field.format[fmt_target].append(token)
+                                fmt_target = None
+                            elif token.startswith('\\'):
+                                fmt_target = token[1:]
+                            else:
+                                field.extra.append(token)
                     field.xpath_end = root.getpath(run._r)
                     fields.append(field)
                     field = None
+                    instructions = ''
             elif field:
                 if tag == 't':
                     field.default = chld.text
-                elif tag == 'instrText':
-                    lex = shlex.shlex(chld.text, posix=True)
-                    lex.whitespace_split = True
-                    lex.commenters = ''
-                    lex.escape = ''
-                    tokens = list(lex)
-                    field.code = tokens[0]
+                elif tag == 'instrText' and chld.text.strip():
+                    instructions += chld.text
+
+    for fld in self._p.xpath('./w:fldSimple'):
+        if fld.attrib.get(instr):
+            field = Field(self)
+            field.xpath_start = root.getpath(fld)
+            field.xpath_end = root.getpath(fld)
+            if fld.find(qn('w:r')):
+                field.default = fld.find(qn('w:r'))[0].text
+            lex = shlex.shlex(fld.attrib.get(instr), posix=True)
+            lex.whitespace_split = True
+            lex.commenters = ''
+            lex.escape = ''
+            tokens = list(lex)
+            field.code = tokens[0]
+            fmt_target = None
+            for token in tokens[1:]:
+                if fmt_target is not None:
+                    field.format[fmt_target].append(token)
                     fmt_target = None
-                    for token in tokens[1:]:
-                        if fmt_target is not None:
-                            field.format[fmt_target].append(token)
-                            fmt_target = None
-                        elif token.startswith('\\'):
-                            fmt_target = token[1:]
-                        else:
-                            field.extra.append(token)
+                elif token.startswith('\\'):
+                    fmt_target = token[1:]
+                else:
+                    field.extra.append(token)
+            fields.append(field)
     return fields
 
 
 Paragraph.fields = _fields
+
+
+# noinspection PyProtectedMember
+def _fields(self):
+    fields = []
+
+    for row in self.rows:
+        for cell in row.cells:
+            for paragraph in cell.paragraphs:
+                fields += paragraph.fields()
+    return fields
+
+Table.fields = _fields
+
+
+# noinspection PyProtectedMember
+def _fields(self):
+    fields = []
+
+    for paragraph in self.paragraphs:
+        fields += paragraph.fields()
+
+    for table in self.tables:
+        fields += table.fields()
+
+    return fields
+
+Textbox.fields = _fields

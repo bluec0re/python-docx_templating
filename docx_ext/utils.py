@@ -12,16 +12,17 @@ log = logging.getLogger(__name__)
 
 class Default(object):
     def __repr__(self):
-        return b'%s(%s)' % (
-            type(self).__name__,
-            b', '.join(
-                b'%s=%s' % (key, repr(getattr(self, key))) for key in self.__dict__
-                if not key.startswith(b'_')))
+        attrs = ', '.join(
+                    '%s=%s' % (key, repr(getattr(self, key))) for key in self.__dict__
+                    if not key.startswith('_'))
+        return '{}({})'.format(type(self).__name__, attrs)
 
     def __str__(self):
         return repr(self)
 
     def __unicode__(self):
+        s = str(self)
+        return s
         return str(self).decode('utf-8')
 
     def __eq__(self, other):
@@ -34,7 +35,7 @@ class Default(object):
 
 def make_relative(path, start):
     log.debug('%s - %s', path, start)
-    if path == start:
+    if path == start or start is None:
         result = './'
     else:
         newpath = os.path.relpath(path, start)
