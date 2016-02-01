@@ -1,2 +1,5 @@
-Pillow
-python-docx
+Pillow==2.7.0
+python-docx==0.7.6
+Jinja2==2.7.3
+lxml==3.4.1
+MarkupSafe==0.23
