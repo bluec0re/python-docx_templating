@@ -1,5 +1,5 @@
 Pillow==2.7.0
 python-docx==0.7.6
-Jinja2==2.7.3
+Jinja2==2.11.3
 lxml==4.6.3
 MarkupSafe==0.23
